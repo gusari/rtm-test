@@ -7,12 +7,45 @@ import (
 	"fmt"
 	"github.com/nlopes/slack"
 	"strings"
+
+	"net/http"
+	"github.com/gorilla/sessions"
 )
+
+var store = sessions.NewCookieStore([]byte("something-very-secret"))
+
+func checkSession(r *http.Request) {
+    // Get a session. Get() always returns a session, even if empty.
+    session, err := store.Get(r, "session-name")
+    if err != nil {
+        log.Print(err.Error())
+        return
+    }
+}
+
+func updateSession(r *http.Request) {
+    // Get a session. Get() always returns a session, even if empty.
+    session, err := store.Get(r, "session-name")
+    if err != nil {
+        log.Print(err.Error())
+        return
+    }
+
+    // Set some session values.
+    session.Values["foo"] = "bar"
+    session.Values[42] = 43
+    // Save it before we write to the response/return from the handler.
+    session.Save(r, w)
+}
 
 func run(api *slack.Client) int {
 	log.Print("go run start!")
 	rtm := api.NewRTM()
 	go rtm.ManageConnection()
+	_, conn, _ := rtm.connect(0, rtm.useRTMStart)
+	r := conn.Request()
+	updateSession(r)
+	checkSession(r)
 
 	for {
 		select {
@@ -22,14 +55,8 @@ func run(api *slack.Client) int {
 				log.Print("Hello Event")
 
 			case *slack.MessageEvent:
-				log.Printf("Message: %v\n", ev)
-				if filterMessage(ev.Text) {
-					x := rtm.NewOutgoingMessage("どこに招待します? :simple_smile: ", ev.Channel)
-					x.ThreadTimestamp = isThreadExist(ev.ThreadTimestamp, ev.Timestamp)
-					rtm.SendMessage(x)
-					makeThreadWeb(api, ev.Timestamp, ev.Channel)
-				}
-				isThreadExist(ev.ThreadTimestamp, ev.Timestamp)
+				log.Printf("Message: %v\n", ev.Text)
+
 			case *slack.InvalidAuthEvent:
 				log.Print("Invalid credentials")
 				return 1
@@ -40,7 +67,7 @@ func run(api *slack.Client) int {
 }
 
 func main() {
-	api := slack.New("hogehoge")
+	api := slack.New("xoxb-232574333637-8CPgYpujD530qwXl5IoYcasJ")
 
 	os.Exit(run(api))
 }
